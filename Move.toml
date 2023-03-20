@@ -1,0 +1,11 @@
+[package]
+name = 'staking'
+version = '1.0.0'
+
+[dependencies]
+MoveStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/move-stdlib", rev = "093b497d1267715a222845aad4fd3ca59da90e8d" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework", rev = "093b497d1267715a222845aad4fd3ca59da90e8d" }
+AptosToken = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-token/", rev = "093b497d1267715a222845aad4fd3ca59da90e8d" }
+
+[addresses]
+contract_addr='67eaae310c2fbd8ebb0d783060e4f553b8c4aa81a7769f601c82021e03e8cdd4'
