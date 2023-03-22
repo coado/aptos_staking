@@ -14,6 +14,7 @@ module contract_addr::staking {
     use aptos_framework::timestamp;
 
     use aptos_std::table::{Self, Table};
+    use aptos_std::type_info;
 
     // ERRORS
     const ERROR_ACCOUNT_IS_NOT_AN_OWNER: u64 = 0;
@@ -26,6 +27,7 @@ module contract_addr::staking {
     const ERROR_TOKEN_STAKING_BALANCE_TOO_LOW: u64 = 7;
     const ERROR_STAKING_DATA_IS_NOT_INITIALIZED: u64 = 8;
     const ERROR_ADDRESS_AND_STAKER_ARE_NOT_EQUAL: u64 = 9;
+    const ERROR_COIN_NAME_IS_NOT_CORRECT: u64 = 10;
 
     // STRUCTS
 
@@ -33,6 +35,7 @@ module contract_addr::staking {
         collection: String,
         creator: address,
         amount_staked: u64,
+        coin_name: String,
         stake_events: EventHandle<StakeEvent>,
         unstake_events: EventHandle<UnstakeEvent>,
         claim_events: EventHandle<ClaimEvent>
@@ -144,8 +147,19 @@ module contract_addr::staking {
         );
     }
 
+    fun assert_coin_name_is_correct<CollectionType, CoinType>() acquires StakingPool {
+        let staking_pool = borrow_global<StakingPool<CollectionType>>(@contract_addr);
 
-    public fun init_pool<CollectionType>(
+        let coin_name = type_info::type_name<CoinType>();
+
+        assert!(
+            coin_name == staking_pool.coin_name,
+            error::invalid_argument(ERROR_COIN_NAME_IS_NOT_CORRECT)
+        );
+    }
+
+
+    public fun init_pool<CollectionType, CoinType>(
         account: &signer,
         collection: String,
         creator: address
@@ -158,11 +172,14 @@ module contract_addr::staking {
 
         assert_staking_pool_is_not_initialized<CollectionType>();
 
+        // getting info about coin type that users will get as reward for staking
+        let coin_name = type_info::type_name<CoinType>();
 
         move_to(account, StakingPool<CollectionType> {
             collection,
             creator,
             amount_staked: 0,
+            coin_name,
             stake_events: account::new_event_handle<StakeEvent>(account),
             unstake_events: account::new_event_handle<UnstakeEvent>(account),
             claim_events: account::new_event_handle<ClaimEvent>(account)
@@ -280,7 +297,27 @@ module contract_addr::staking {
     }
 
 
+    public fun claim<CollectionType, CoinType>(
+        account: &signer,
+        creator: address,
+        collection: String,
+        token_name: String,
+        property_version: u64
+    ) acquires StakingData, StakingPool {
+        let account_address = signer::address_of(account);
 
+        assert_staking_pool_is_initialized<CollectionType>();
+
+        assert_staking_data_is_initialized<CollectionType>(account_address);
+
+        let token_id = token::create_token_id_raw(creator, collection, token_name, property_version);
+
+        assert_token_is_staked<CollectionType>(account_address, token_id);
+
+        assert_coin_name_is_correct<CollectionType, CoinType>();
+
+        // TODO: implement claiming
+    }
 
 
     fun increase_staked_amount<CollectionType>(amount: u64) acquires StakingPool {
