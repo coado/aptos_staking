@@ -8,4 +8,4 @@ AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir 
 AptosToken = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-token/", rev = "093b497d1267715a222845aad4fd3ca59da90e8d" }
 
 [addresses]
-contract_addr='67eaae310c2fbd8ebb0d783060e4f553b8c4aa81a7769f601c82021e03e8cdd4'
+contract_addr='3d8d1ec470e29a3e60c10fe19d9628024535c6e570696d84e475b9298bcd99e3'
