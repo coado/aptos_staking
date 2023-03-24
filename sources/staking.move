@@ -12,6 +12,7 @@ module contract_addr::staking {
     use aptos_framework::account;
     use aptos_framework::event::{Self, EventHandle};
     use aptos_framework::timestamp;
+    use aptos_framework::resource_account;
 
     use aptos_std::table::{Self, Table};
     use aptos_std::type_info;
@@ -28,6 +29,7 @@ module contract_addr::staking {
     const ERROR_STAKING_DATA_IS_NOT_INITIALIZED: u64 = 8;
     const ERROR_ADDRESS_AND_STAKER_ARE_NOT_EQUAL: u64 = 9;
     const ERROR_COIN_NAME_IS_NOT_CORRECT: u64 = 10;
+    const ERROR_MULTIPLIER_IS_ZERO: u64 = 11;
 
     // STRUCTS
 
@@ -36,9 +38,15 @@ module contract_addr::staking {
         creator: address,
         amount_staked: u64,
         coin_name: String,
+        reward_interval: u64,
+        reward: u64,
         stake_events: EventHandle<StakeEvent>,
         unstake_events: EventHandle<UnstakeEvent>,
         claim_events: EventHandle<ClaimEvent>
+    }
+
+    struct ResourceCapability has key {
+        signer_cap: SignerCapability,
     }
 
     struct ResourceStakingData<phantom CollectionType> has key, drop {
@@ -158,11 +166,20 @@ module contract_addr::staking {
         );
     }
 
+    fun assert_reward_multiplier_is_not_zero(multiplier: u64) {
+        assert!(
+            multiplier != 0,
+            error::invalid_state(ERROR_MULTIPLIER_IS_ZERO)
+        );
+    }
+
 
     public fun init_pool<CollectionType, CoinType>(
         account: &signer,
         collection: String,
-        creator: address
+        creator: address,
+        reward_interval: u64,
+        reward: u64
     ) {
         let account_address = signer::address_of(account);
         
@@ -180,6 +197,8 @@ module contract_addr::staking {
             creator,
             amount_staked: 0,
             coin_name,
+            reward_interval,
+            reward,
             stake_events: account::new_event_handle<StakeEvent>(account),
             unstake_events: account::new_event_handle<UnstakeEvent>(account),
             claim_events: account::new_event_handle<ClaimEvent>(account)
@@ -316,7 +335,45 @@ module contract_addr::staking {
 
         assert_coin_name_is_correct<CollectionType, CoinType>();
 
-        // TODO: implement claiming
+        let staking_data = borrow_global_mut<StakingData>(account_address);
+
+        let token_staking_data = table::borrow_mut(&mut staking_data.token_staking_datas, token_id);
+
+        let current_timestamp = timestamp::now_seconds(); 
+
+        // time left from previous claiming
+        let time_left = current_timestamp - token_staking_data.start_timestamp_seconds;
+
+        let staking_pool = borrow_global<StakingPool>(@contract_addr);
+
+        let reward_multiplier = time_left / staking_pool.reward_interval;
+
+        assert_reward_multiplier_is_not_zero(reward_multiplier);
+        
+        let tokens_to_send = staking_pool.reward * reward_multiplier;
+
+        token_staking_data.start_timestamp_seconds = current_timestamp;
+        staking_data.claimed =  staking_data.claimed + tokens_to_send;
+
+        // register CoinType under user account
+        // this function will also check if user has already registered CoinType
+        coin::register<CoinType>(account);
+
+        let vault_capabilities = borrow_global<ResourceCapability>(@contract_addr);
+
+        // getting signer caps to the module
+        let vault = account::create_signer_with_capability(&vault_capabilities.signer_cap);
+
+        coin::transfer<CoinType>(&vault, account_address, tokens_to_send);
+    }
+
+
+    fun init_module(owner: &signer) {
+        let resource_signer_cap = resource_account::retrieve_resource_account_cap(owner, @contract_addr);
+
+        move_to(owner, ResourceCapability {
+            signer_cap: resource_signer_cap
+        });
     }
 
 
